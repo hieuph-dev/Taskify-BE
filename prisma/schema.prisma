@@ -1,0 +1,117 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  NOT_DONE
+  COMPLETED
+  OVERDUE
+}
+
+model user {
+  id         String    @id @default(cuid())
+  email      String    @unique
+  password   String
+  created_at DateTime  @default(now())
+  xp         Int       @default(0)
+  streaks    Int       @default(0)
+  last_login DateTime? @default(now())
+
+  tasks             task[]
+  badges            badge[]
+  notifications     notification[]
+  daily_task_record dailyTaskRecord[]
+
+  level   level?  @relation(fields: [levelId], references: [id])
+  levelId String?
+}
+
+model task {
+  // basic info of a task
+  id         String   @id @default(cuid())
+  name       String
+  note       String?
+  category   String[]
+  created_at DateTime @default(now())
+
+  // state and time of the task
+  is_important Boolean    @default(false)
+  is_urgent    Boolean    @default(false)
+  deadline     DateTime
+  completed_at DateTime?
+  status       TaskStatus @default(NOT_DONE)
+
+  // relate to user table
+  user    user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id String // fk to user table
+
+  // relate to other tables
+  subtasks               subtask[]
+  reminder               reminder?
+  dailyTaskRecordDate    DateTime?        @db.Date // là cột user_id của bảng dailyTaskRecord
+  dailyTaskRecord        dailyTaskRecord? @relation(fields: [dailyTaskRecordUser_id, dailyTaskRecordDate], references: [user_id, date]) // bản ghi công việc theo ngày
+  dailyTaskRecordUser_id String? // là cột date của bảng dailyTaskRecord
+}
+
+model subtask {
+  id           String   @id @default(cuid())
+  name         String
+  is_completed Boolean  @default(false)
+  created_at   DateTime @default(now())
+
+  task    task   @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  task_id String
+}
+
+model badge {
+  id             String @id @default(cuid())
+  name           String
+  icon           String
+  description    String
+  level_required Int
+
+  users user[]
+}
+
+model notification {
+  id         String   @id @default(cuid())
+  content    String
+  created_at DateTime @default(now())
+  is_checked Boolean  @default(false)
+
+  user    user?   @relation(fields: [user_id], references: [id], onDelete: Cascade) // relation
+  user_id String?
+}
+
+model dailyTaskRecord {
+  user_id String // pk
+  date    DateTime @db.Date // pk
+
+  user  user   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tasks task[]
+
+  @@id([user_id, date]) // cặp pk kép
+}
+
+model level {
+  id          String @id @default(cuid())
+  name        String
+  xp_required Int
+
+  users user[]
+}
+
+model reminder {
+  id         String   @id @default(cuid())
+  time       DateTime
+  created_at DateTime @default(now())
+
+  task    task   @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  task_id String @unique
+}
