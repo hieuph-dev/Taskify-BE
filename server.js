@@ -4,17 +4,28 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import cookieParser from 'cookie-parser'
 import cookieSession from 'cookie-session'
+import helmet from 'helmet'
+import { rateLimit } from 'express-rate-limit'
 
 dotenv.config()
 const app = express()
 const PORT = process.env.PORT || 5000
 
 app.use(cookieParser())
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 app.use(
     cors({
-        origin: ['http://localhost:5173'],
+        origin: process.env.FRONTEND_URL,
         credentials: true,
+    })
+)
+
+// Security middleware
+app.use(helmet())
+app.use(
+    rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 100, // limit 100 connections
     })
 )
 
