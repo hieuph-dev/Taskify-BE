@@ -50,12 +50,14 @@ export const setTokenCookies = (res, accessToken, refreshToken) => {
 
 // Clear cookies khi logout
 export const clearTokenCookies = (res) => {
-    res.cookie('token', '', {
+    res.clearCookie('token', {
         httpOnly: true,
-        expires: new Date(0),
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     })
-    res.cookie('refreshToken', '', {
+    res.clearCookie('refreshToken', {
         httpOnly: true,
-        expires: new Date(0),
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     })
 }

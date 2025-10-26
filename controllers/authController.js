@@ -1,5 +1,6 @@
 import { prisma } from '../config/db.js'
 import {
+    clearTokenCookies,
     comparePassword,
     generateAcessToken,
     hashPassword,
@@ -147,5 +148,23 @@ export const signIn = async (req, res) => {
         return res
             .status(500)
             .json({ success: false, message: 'Internal Server Error' })
+    }
+}
+
+export const signOut = async (req, res) => {
+    try {
+        // Clear cookies
+        clearTokenCookies(res)
+
+        res.status(200).json({
+            success: true,
+            message: 'Sign out successfully!',
+        })
+    } catch (error) {
+        console.error('Error signing out:', error)
+        res.status(500).json({
+            success: false,
+            message: 'Server error when logging out',
+        })
     }
 }
