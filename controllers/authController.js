@@ -168,3 +168,34 @@ export const signOut = async (req, res) => {
         })
     }
 }
+
+export const getMe = async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            omit: {
+                password: true,
+            },
+            where: { id: req.user.id },
+            include: {
+                badges: true,
+                notifications: true,
+                tasks: { include: { subtasks: true } },
+                daily_task_record: { include: { tasks: true } },
+                level: true,
+            },
+        })
+
+        if (user) {
+            return res.status(200).json({ success: true, data: user })
+        }
+
+        return res
+            .status(500)
+            .json({ success: false, message: 'User not found' })
+    } catch (error) {
+        console.log('Error get me: ', error)
+        return res
+            .status(500)
+            .json({ success: false, message: 'Internal Server Error' })
+    }
+}

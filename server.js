@@ -13,7 +13,7 @@ const app = express()
 const PORT = process.env.PORT || 5000
 
 // Body parser middleware
-app.use(cookieParser())
+app.use(cookieParser()) // Đọc cookies từ request
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
@@ -26,11 +26,12 @@ app.use(
 )
 
 // Security middleware
-app.use(helmet())
+app.use(helmet()) // Bảo mật HTTP headers
 
 // Rate limiting
 app.use(
     rateLimit({
+        // Giới hạn 100 requests/15 phút
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 100, // limit 100 requests per windowMs
         message: 'Too many requests from this IP, please try again later.',
