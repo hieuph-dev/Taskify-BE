@@ -63,3 +63,37 @@ export const protect = async (req, res, next) => {
         })
     }
 }
+
+// Middleware để check refresh token
+export const verifyRefreshToken = async (req, res, next) => {
+    try {
+        const refreshToken = req.cookies.refreshToken
+
+        if (!refreshToken) {
+            return res.status(401).json({
+                success: false,
+                message: 'Refresh token not found',
+            })
+        }
+
+        try {
+            const decoded = jwt.verify(
+                refreshToken,
+                process.env.JWT_REFRESH_SECRET
+            )
+            req.userId = decoded.id
+            next()
+        } catch (error) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid refresh token',
+            })
+        }
+    } catch (error) {
+        console.error('Refresh token middleware error: ', error)
+        return res.status(500).json({
+            success: false,
+            message: 'Server error when verify token',
+        })
+    }
+}

@@ -1,6 +1,7 @@
 import express from 'express'
 import {
     getMe,
+    refreshToken,
     signIn,
     signOut,
     signUp,
@@ -10,13 +11,14 @@ import {
     signUpValidator,
     signInValidator,
 } from '../validation/userValidation.js'
-import { protect } from '../middleware/authMiddleware.js'
+import { protect, verifyRefreshToken } from '../middleware/authMiddleware.js'
 
 const router = express.Router()
 
 // Public routes
 router.post('/sign-up', validate(signUpValidator), signUp)
 router.post('/sign-in', validate(signInValidator), signIn)
+router.post('/refresh-token', verifyRefreshToken, refreshToken)
 
 // Protected routes
 router.post('/sign-out', protect, signOut)

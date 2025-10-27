@@ -3,6 +3,7 @@ import {
     clearTokenCookies,
     comparePassword,
     generateAcessToken,
+    generateRefreshToken,
     hashPassword,
     setTokenCookies,
 } from '../utils/authUtils.js'
@@ -50,7 +51,7 @@ export const signUp = async (req, res) => {
 
         // Generate tokens
         const accessToken = generateAcessToken(newUser.id)
-        const refreshToken = generateAcessToken(newUser.id)
+        const refreshToken = generateRefreshToken(newUser.id)
 
         // Set cookies
         setTokenCookies(res, accessToken, refreshToken)
@@ -61,6 +62,7 @@ export const signUp = async (req, res) => {
             data: {
                 newUser,
                 accessToken,
+                refreshToken,
             },
         })
     } catch (error) {
@@ -121,7 +123,7 @@ export const signIn = async (req, res) => {
 
         // Generate tokens
         const accessToken = generateAcessToken(user.id)
-        const refreshToken = generateAcessToken(user.id)
+        const refreshToken = generateRefreshToken(user.id)
 
         // Set cookies
         setTokenCookies(res, accessToken, refreshToken)
@@ -135,6 +137,7 @@ export const signIn = async (req, res) => {
             data: {
                 user: userWithoutPassword,
                 accessToken,
+                refreshToken,
             },
         })
     } catch (error) {
@@ -197,5 +200,44 @@ export const getMe = async (req, res) => {
         return res
             .status(500)
             .json({ success: false, message: 'Internal Server Error' })
+    }
+}
+
+export const refreshToken = async (req, res) => {
+    try {
+        const userId = req.userId // Từ verifyRefreshToken middleware
+
+        // Check user exists
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+        })
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "User doesn't exists",
+            })
+        }
+
+        // Generate new tokens
+        const accessToken = generateAcessToken(userId)
+        const refreshToken = generateRefreshToken(userId)
+
+        // Set new cookies
+        setTokenCookies(res, accessToken, refreshToken)
+
+        res.status(200).json({
+            success: true,
+            message: 'Refresh token successfully',
+            data: {
+                accessToken,
+            },
+        })
+    } catch (error) {
+        console.error('Refresh token error:', error)
+        res.status(500).json({
+            success: false,
+            message: 'Error server when refresh token',
+        })
     }
 }
