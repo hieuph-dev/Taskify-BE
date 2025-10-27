@@ -241,3 +241,51 @@ export const refreshToken = async (req, res) => {
         })
     }
 }
+
+export const changePassword = async (req, res) => {
+    try {
+        const { current_password, new_password } = req.body
+        const userId = req.user.id // Từ verifyRefreshToken middleware
+
+        // lấy user với password
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+        })
+
+        // Verify current password
+        const isPasswordValid = await comparePassword(
+            current_password,
+            user.password
+        )
+
+        if (!isPasswordValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'The current password is in correct!',
+            })
+        }
+
+        // Hash new password
+        const hashedNewPassword = await hashPassword(new_password)
+
+        // Update password
+        await prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedNewPassword },
+        })
+
+        // Clear old tokens
+        clearTokenCookies(res)
+
+        res.status(200).json({
+            success: true,
+            message: 'Change password successfully. Please signin again',
+        })
+    } catch (error) {
+        console.error('Change password error:', error)
+        res.status(500).json({
+            success: false,
+            message: 'Error server when change password',
+        })
+    }
+}

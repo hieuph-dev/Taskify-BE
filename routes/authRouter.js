@@ -1,5 +1,6 @@
 import express from 'express'
 import {
+    changePassword,
     getMe,
     refreshToken,
     signIn,
@@ -10,6 +11,7 @@ import {
     validate,
     signUpValidator,
     signInValidator,
+    changePasswordValidator,
 } from '../validation/userValidation.js'
 import { protect, verifyRefreshToken } from '../middleware/authMiddleware.js'
 
@@ -23,5 +25,11 @@ router.post('/refresh-token', verifyRefreshToken, refreshToken)
 // Protected routes
 router.post('/sign-out', protect, signOut)
 router.get('/me', protect, getMe)
+router.put(
+    '/change-password',
+    protect,
+    validate(changePasswordValidator),
+    changePassword
+)
 
 export default router
