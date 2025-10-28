@@ -306,7 +306,51 @@ export const updateTask = async (req, res) => {
             },
             include: { subtasks: true },
         })
-    } catch (error) {}
+
+        // Check OVERDUE nếu update deadline
+        if (deadline && oldTask.status !== 'COMPLETED') {
+            const now = new Date()
+            const isOverdue = parsedDeadline <= now
+
+            if (isOverdue) {
+                updatedTask = await prisma.task.update({
+                    where: { id },
+                    data: { status: 'OVERDUE' },
+                    include: { subtasks: true },
+                })
+
+                // Chỉ trừ XP nếu task chuyển từ NOT_DONE -> OVERDUE
+                if (oldTask.status === 'NOT_DONE') {
+                    await minusXpAndCheckLevel(userId, 'overdue')
+                }
+            } else {
+                updatedTask = await prisma.task.update({
+                    where: { id },
+                    data: { status: 'NOT_DONE' },
+                    include: { subtasks: true },
+                })
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: updatedTask,
+        })
+    } catch (error) {
+        console.error('Error updating task:', error)
+
+        if (error.isJoi) {
+            return res.status(400).json({
+                success: false,
+                message: error.details.map((err) => err.message),
+            })
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal Server Error',
+        })
+    }
 }
 
 // ============================================
