@@ -2,12 +2,11 @@ import { prisma } from '../config/db.js'
 import {
     clearTokenCookies,
     comparePassword,
-    generateAcessToken,
+    generateAccessToken,
     generateRefreshToken,
     hashPassword,
     setTokenCookies,
 } from '../utils/authUtils.js'
-import { signUpValidator } from '../validation/userValidation.js'
 
 export const signUp = async (req, res) => {
     const data = req.body
@@ -17,11 +16,9 @@ export const signUp = async (req, res) => {
         if (!req.body || Object.keys(req.body).length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Please fill in enough fiels',
+                message: 'Please fill in enough fields',
             })
         }
-
-        await signUpValidator.validateAsync(data)
 
         const checkEmail = await prisma.user.findUnique({
             where: { email: data.email },
@@ -35,7 +32,7 @@ export const signUp = async (req, res) => {
 
         const hashedPassword = await hashPassword(data.password)
 
-        const newUser = await prisma.user.create({
+        const user = await prisma.user.create({
             data: {
                 email: data.email,
                 password: hashedPassword,
@@ -50,17 +47,18 @@ export const signUp = async (req, res) => {
         })
 
         // Generate tokens
-        const accessToken = generateAcessToken(newUser.id)
-        const refreshToken = generateRefreshToken(newUser.id)
+        const accessToken = generateAccessToken(user.id)
+        const refreshToken = generateRefreshToken(user.id)
 
         // Set cookies
         setTokenCookies(res, accessToken, refreshToken)
 
+        const { password: _, ...userWithoutPassword } = user
         return res.status(200).json({
             success: true,
             message: 'Sign up successfully',
             data: {
-                newUser,
+                user: userWithoutPassword,
                 accessToken,
                 refreshToken,
             },
@@ -105,7 +103,7 @@ export const signIn = async (req, res) => {
         if (!user) {
             return res
                 .status(404)
-                .json({ success: false, message: 'User not founded.' })
+                .json({ success: false, message: 'User not found.' })
         }
 
         const isPasswordValid = await comparePassword(password, user.password)
@@ -122,7 +120,7 @@ export const signIn = async (req, res) => {
         })
 
         // Generate tokens
-        const accessToken = generateAcessToken(user.id)
+        const accessToken = generateAccessToken(user.id)
         const refreshToken = generateRefreshToken(user.id)
 
         // Set cookies
@@ -220,7 +218,7 @@ export const refreshToken = async (req, res) => {
         }
 
         // Generate new tokens
-        const accessToken = generateAcessToken(userId)
+        const accessToken = generateAccessToken(userId)
         const refreshToken = generateRefreshToken(userId)
 
         // Set new cookies

@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcrypt'
 
 // Generate JWT access token (1d)
-export const generateAcessToken = (userId) => {
+export const generateAccessToken = (userId) => {
     return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRE || '1d',
     })
@@ -50,14 +50,12 @@ export const setTokenCookies = (res, accessToken, refreshToken) => {
 
 // Clear cookies khi logout
 export const clearTokenCookies = (res) => {
-    res.clearCookie('token', {
+    const cookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    })
-    res.clearCookie('refreshToken', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    })
+        sameSite: 'strict',
+    }
+
+    res.clearCookie('token', cookieOptions)
+    res.clearCookie('refreshToken', cookieOptions)
 }

@@ -1,12 +1,12 @@
 import authRouter from './authRouter.js'
-// import taskRouter from './taskRouter.js'
+import taskRouter from './taskRouter.js'
 
 export const routes = (app) => {
     // Auth routes
     app.use('/api/v1/auth', authRouter)
 
     // Task routes
-    // app.use('/api/v1/task', taskRouter)
+    app.use('/api/v1/task', taskRouter)
 
     // Health check
     app.use('/api/v1/health', (req, res) => {

@@ -51,6 +51,9 @@ app.use(
     })
 )
 
+// Init routes
+routes(app)
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.log('Global error:', err.stack)
@@ -61,9 +64,6 @@ app.use((err, req, res, next) => {
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     })
 })
-
-// Init routes
-routes(app)
 
 // Start server
 app.listen(PORT, () => {

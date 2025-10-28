@@ -6,8 +6,12 @@ export const protect = async (req, res, next) => {
     try {
         let token
 
-        // Lấy token từ Authorization header hoặc cookie
-        if (
+        // Ưu tiên lấy token từ cookie (vì đã set cookie rồi)
+        if (req.cookies.token) {
+            token = req.cookies.token
+        }
+        // Fallback: Lấy từ Authorization header (test postman)
+        else if (
             req.headers.authorization &&
             req.headers.authorization.startsWith('Bearer')
         ) {
