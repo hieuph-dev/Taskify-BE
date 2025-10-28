@@ -2,10 +2,16 @@ import express from 'express'
 import { protect } from '../middleware/authMiddleware.js'
 import {
     createTask,
+    getDailyRecordForUser,
     getTaskById,
     getTasksByUserId,
+    updateTask,
 } from '../controllers/taskController.js'
-import { createTaskValidator, validate } from '../validation/taskValidation.js'
+import {
+    createTaskValidator,
+    updateTaskValidator,
+    validate,
+} from '../validation/taskValidation.js'
 
 const router = express.Router()
 
@@ -22,7 +28,9 @@ router.post('/', protect, validate(createTaskValidator), createTask)
 // Get daily task record trong khoảng thời gian (query: from, to)
 router.get('/record', protect, getDailyRecordForUser)
 
-// SINGLE TASK OPERATIONS (phải đặt cuối)
+// -- SINGLE TASK OPERATIONS --
+// Update task
+router.put('/:id', protect, validate(updateTaskValidator), updateTask)
 
 // Get task by ID
 router.get('/:id', protect, getTaskById)

@@ -237,6 +237,79 @@ export const createTask = async (req, res) => {
 }
 
 // ============================================
+// API 6: UPDATE TASK
+// ============================================
+export const updateTask = async (req, res) => {
+    const { id } = req.params
+    const {
+        name,
+        note,
+        category,
+        is_important,
+        is_urgent,
+        deadline,
+        subtasks,
+    } = req.body
+    const userId = req.user.id
+
+    try {
+        // Validate body
+        if (!req.body || Object.keys(req.body).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No data provided',
+            })
+        }
+
+        // Check task exists and ownership
+        const oldTask = await prisma.task.findFirst({
+            where: { id, user_id: userId },
+            include: { subtasks: true },
+        })
+
+        if (!oldTask) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task not found',
+            })
+        }
+
+        // Parse deadline nếu có
+        let parsedDeadline = oldTask.deadline
+        if (deadline) {
+            parsedDeadline = new Date(deadline)
+        }
+
+        // Update task
+        let updatedTask = await prisma.task.update({
+            where: { id },
+            data: {
+                name: name ?? oldTask.name,
+                note: note ?? oldTask.note,
+                category: category ?? oldTask.category,
+                is_important: is_important ?? oldTask.is_important,
+                is_urgent: is_urgent ?? oldTask.is_urgent,
+                deadline: deadline ?? oldTask.deadline,
+
+                // Upsert subtasks
+                subtasks: subtasks
+                    ? {
+                          upsert: subtasks.map((st) => ({
+                              where: { id: st.id || '' },
+                              update: {
+                                  name: st.name,
+                                  is_completed: st.is_completed,
+                              },
+                          })),
+                      }
+                    : undefined,
+            },
+            include: { subtasks: true },
+        })
+    } catch (error) {}
+}
+
+// ============================================
 // API 9: GET DAILY RECORD
 // ============================================
 export const getDailyRecordForUser = async (req, res) => {
