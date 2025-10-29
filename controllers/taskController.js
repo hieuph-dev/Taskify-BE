@@ -1,5 +1,8 @@
 import { prisma } from '../config/db.js'
-import { createTaskValidator } from '../validation/taskValidation.js'
+import {
+    createTaskValidator,
+    updateTaskValidator,
+} from '../validation/taskValidation.js'
 
 // ============================================
 // HELPER FUNCTIONS - XP & LEVEL
@@ -16,9 +19,9 @@ async function addXpAndCheckLevel(userId) {
 
     const XP_PER_TASK = 10
     let newXp = user.xp + XP_PER_TASK
-    let currentLevel = user.level
 
     // Tìm level hiện tại nếu chưa có
+    let currentLevel = user.level
     if (!currentLevel) {
         currentLevel = await prisma.level.findFirst({
             orderBy: { xp_required: 'asc' },
@@ -31,9 +34,8 @@ async function addXpAndCheckLevel(userId) {
         orderBy: { xp_required: 'asc' },
     })
 
-    let newLevelId = user.levelId
-
     // Check level up
+    let newLevelId = user.levelId
     if (nextLevel && newXp >= nextLevel.xp_required) {
         newLevelId = nextLevel.id
     }
@@ -57,15 +59,28 @@ async function minusXpAndCheckLevel(userId, type) {
         where: { id: userId },
         include: { level: true },
     })
-
     if (!user) return null
 
     const xpToMinus = type === 'overdue' ? 5 : 10
-    const newXp = Math.max(0, user.xp - xpToMinus)
+    const newXp = Math.max(0, user.xp - xpToMinus) // Math.max để không cho XP âm → tối thiểu là 0.
+
+    // Tìm level phù hợp với XP mới
+    const newLevel = await prisma.level.findFirst({
+        where: { xp_required: { lte: newXp } },
+        orderBy: { xp_required: 'desc' },
+    })
+
+    const currentLevel =
+        user.level ||
+        (await prisma.level.findFirst({
+            orderBy: { xp_required: 'asc' },
+        }))
+
+    const newLevelId = newLevel ? newLevel.id : currentLevel.id
 
     const updatedUser = await prisma.user.update({
         where: { id: userId },
-        data: { xp: newXp },
+        data: { xp: newXp, levelId: newLevelId },
         include: { level: true },
     })
 
@@ -139,6 +154,94 @@ export const getTaskById = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Failed to retrieve task',
+        })
+    }
+}
+
+// ============================================
+// API 3: DELETE TASK
+// ============================================
+export const deleteTask = async (req, res) => {
+    const { id } = req.params
+    const userId = req.user.id
+
+    try {
+        // Check task exists and ownership
+        const task = await prisma.task.findFirst({
+            where: { id, user_id: userId },
+        })
+
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task not found',
+            })
+        }
+
+        // Delete (cascade sẽ xóa subtasks tự động)
+        await prisma.task.delete({ where: { id } })
+
+        return res.status(200).json({
+            success: true,
+            message: 'Task deleted successfully',
+        })
+    } catch (error) {
+        console.error('Error deleting task:', error)
+        return res.status(500).json({
+            success: false,
+            message: 'Internal Server Error',
+        })
+    }
+}
+
+// ============================================
+// API 4: UPDATE TASK PRIORITY
+// ============================================
+export const updateTaskPriority = async (req, res) => {
+    const { id } = req.params
+    const { is_important, is_urgent } = req.body
+    const userId = req.user.id
+
+    try {
+        // Validate input
+        if (is_important === undefined && is_urgent === undefined) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'At least one of is_important or is_urgent must be provided',
+            })
+        }
+
+        // Check task exists and ownership
+        const task = await prisma.task.findFirst({
+            where: { id, user_id: userId },
+        })
+
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task not found',
+            })
+        }
+
+        // Update
+        const updatedTask = await prisma.task.update({
+            where: { id },
+            data: {
+                is_important: is_important ?? task.is_important,
+                is_urgent: is_urgent ?? task.is_urgent,
+            },
+        })
+
+        return res.status(200).json({
+            success: true,
+            data: updatedTask,
+        })
+    } catch (error) {
+        console.error('Error updating task priority:', error)
+        return res.status(500).json({
+            success: false,
+            message: 'Internal Server Error',
         })
     }
 }
@@ -261,6 +364,8 @@ export const updateTask = async (req, res) => {
             })
         }
 
+        await updateTaskValidator.validateAsync(req.body)
+
         // Check task exists and ownership
         const oldTask = await prisma.task.findFirst({
             where: { id, user_id: userId },
@@ -284,7 +389,7 @@ export const updateTask = async (req, res) => {
         let updatedTask = await prisma.task.update({
             where: { id },
             data: {
-                name: name ?? oldTask.name,
+                name: name ?? oldTask.name, // ?? để giữ giá trị cũ nếu không có thay đổi.
                 note: note ?? oldTask.note,
                 category: category ?? oldTask.category,
                 is_important: is_important ?? oldTask.is_important,
@@ -294,11 +399,18 @@ export const updateTask = async (req, res) => {
                 // Upsert subtasks
                 subtasks: subtasks
                     ? {
+                          // Upsert = Update + Insert
+                          //    → Nếu subtask có ID → sửa
+                          //    → Nếu subtask không có ID → tạo mới
                           upsert: subtasks.map((st) => ({
                               where: { id: st.id || '' },
                               update: {
                                   name: st.name,
                                   is_completed: st.is_completed,
+                              },
+                              create: {
+                                  name: st.name,
+                                  is_completed: st.is_completed ?? false,
                               },
                           })),
                       }
@@ -346,6 +458,79 @@ export const updateTask = async (req, res) => {
             })
         }
 
+        return res.status(500).json({
+            success: false,
+            message: 'Internal Server Error',
+        })
+    }
+}
+
+// ============================================
+// API 7: MARK TASK COMPLETED
+// ============================================
+export const markTaskCompleted = async (req, res) => {
+    const userId = req.user.id
+    const { id } = req.params
+
+    try {
+        // Check task exists and ownership
+        const task = await prisma.task.findFirst({
+            where: { id, user_id: userId },
+        })
+
+        if (!task) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task not found',
+            })
+        }
+
+        // Không cho complete task đã completed
+        if (task.status === 'COMPLETED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Task is already completed',
+            })
+        }
+
+        const now = new Date()
+        const today = new Date(now)
+        today.setHours(0, 0, 0, 0)
+
+        // Tạo hoặc lấy dailyTaskRecord
+        await prisma.dailyTaskRecord.upsert({
+            where: {
+                user_id_date: { user_id: userId, date: today },
+            },
+            update: {},
+            create: {
+                user_id: userId,
+                date: today,
+            },
+        })
+
+        // Update task status
+        const updatedTask = await prisma.task.update({
+            where: { id },
+            data: {
+                status: 'COMPLETED',
+                completed_at: now,
+                dailyTaskRecordUser_id: userId,
+                dailyTaskRecordDate: today,
+            },
+        })
+        // Cộng XP và check level
+        const updatedUser = await addXpAndCheckLevel(userId)
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                task: updatedTask,
+                user: updatedUser,
+            },
+        })
+    } catch (error) {
+        console.error('Error marking task completed:', error)
         return res.status(500).json({
             success: false,
             message: 'Internal Server Error',
