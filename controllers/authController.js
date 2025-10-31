@@ -32,10 +32,26 @@ export const signUp = async (req, res) => {
 
         const hashedPassword = await hashPassword(data.password)
 
+        // Lấy level đầu tiên (level thấp nhất)
+        const firstLevel = await prisma.level.findFirst({
+            orderBy: { xp_required: 'asc' },
+        })
+
+        // Nếu chưa có level nào trong DB, tạo level mặc định
+        if (!firstLevel) {
+            await prisma.level.create({
+                data: {
+                    name: 'Newbie',
+                    xp_required: 0,
+                },
+            })
+        }
+
         const user = await prisma.user.create({
             data: {
                 email: data.email,
                 password: hashedPassword,
+                levelId: firstLevel?.id, // ✅ Gán level đầu tiên
             },
             include: {
                 badges: true,

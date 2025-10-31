@@ -559,12 +559,12 @@ export const markTaskCompleted = async (req, res) => {
         })
         // Cộng XP và check level
         const updatedUser = await addXpAndCheckLevel(userId)
-
+        const { password: _, ...userWithoutPassword } = updatedUser
         return res.status(200).json({
             success: true,
             data: {
                 task: updatedTask,
-                user: updatedUser,
+                user: userWithoutPassword,
             },
         })
     } catch (error) {
