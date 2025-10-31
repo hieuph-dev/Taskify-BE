@@ -8,8 +8,33 @@ import {
 // HELPER FUNCTIONS - XP & LEVEL
 // ============================================
 
+// Khởi tạo level mặc định cho user mới
+async function ensureUserHasLevel(userId) {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { level: true },
+    })
+
+    // Nếu user chưa có level, gán level đầu tiên (thấp nhất)
+    if (!user.levelId) {
+        const firstLevel = await prisma.level.findFirst({
+            orderBy: { xp_required: 'asc' },
+        })
+
+        if (firstLevel) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { levelId: firstLevel.id },
+            })
+        }
+    }
+}
+
 // Cộng XP và check level up
 async function addXpAndCheckLevel(userId) {
+    // Đảm bảo user có level
+    await ensureUserHasLevel(userId)
+
     const user = await prisma.user.findUnique({
         where: { id: userId },
         include: { level: true },
@@ -19,9 +44,11 @@ async function addXpAndCheckLevel(userId) {
 
     const XP_PER_TASK = 10
     let newXp = user.xp + XP_PER_TASK
+    console.log('new XP', newXp)
 
     // Tìm level hiện tại nếu chưa có
     let currentLevel = user.level
+    console.log('current level', currentLevel)
     if (!currentLevel) {
         currentLevel = await prisma.level.findFirst({
             orderBy: { xp_required: 'asc' },
@@ -55,6 +82,9 @@ async function addXpAndCheckLevel(userId) {
 
 // Trừ XP và check level down
 async function minusXpAndCheckLevel(userId, type) {
+    // Đảm bảo user có level
+    await ensureUserHasLevel(userId)
+
     const user = await prisma.user.findUnique({
         where: { id: userId },
         include: { level: true },
@@ -381,8 +411,11 @@ export const updateTask = async (req, res) => {
 
         // Parse deadline nếu có
         let parsedDeadline = oldTask.deadline
+        let shouldCheckOverdue = false
+
         if (deadline) {
             parsedDeadline = new Date(deadline)
+            shouldCheckOverdue = true // Chỉ check overdue khi có update deadline
         }
 
         // Update task
@@ -394,7 +427,7 @@ export const updateTask = async (req, res) => {
                 category: category ?? oldTask.category,
                 is_important: is_important ?? oldTask.is_important,
                 is_urgent: is_urgent ?? oldTask.is_urgent,
-                deadline: deadline ?? oldTask.deadline,
+                deadline: parsedDeadline,
 
                 // Upsert subtasks
                 subtasks: subtasks
@@ -419,23 +452,28 @@ export const updateTask = async (req, res) => {
             include: { subtasks: true },
         })
 
-        // Check OVERDUE nếu update deadline
-        if (deadline && oldTask.status !== 'COMPLETED') {
+        // ⚠️ CHỈ check OVERDUE khi:
+        // 1. Có update deadline
+        // 2. Task chưa COMPLETED
+        // 3. Task hiện tại là NOT_DONE (không phải đã OVERDUE rồi)
+        if (shouldCheckOverdue && oldTask.status !== 'COMPLETED') {
             const now = new Date()
             const isOverdue = parsedDeadline <= now
 
-            if (isOverdue) {
+            if (isOverdue && oldTask.status === 'NOT_DONE') {
+                // Chuyển từ NOT_DONE → OVERDUE: TRỪ XP
                 updatedTask = await prisma.task.update({
                     where: { id },
                     data: { status: 'OVERDUE' },
                     include: { subtasks: true },
                 })
 
-                // Chỉ trừ XP nếu task chuyển từ NOT_DONE -> OVERDUE
-                if (oldTask.status === 'NOT_DONE') {
-                    await minusXpAndCheckLevel(userId, 'overdue')
-                }
-            } else {
+                await minusXpAndCheckLevel(userId, 'overdue')
+            } else if (isOverdue && oldTask.status === 'OVERDUE') {
+                // Đã OVERDUE rồi, giữ nguyên OVERDUE, KHÔNG trừ XP
+                // Không làm gì cả
+            } else if (!isOverdue) {
+                // Deadline mới còn hạn → chuyển về NOT_DONE
                 updatedTask = await prisma.task.update({
                     where: { id },
                     data: { status: 'NOT_DONE' },
